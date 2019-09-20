@@ -1,0 +1,66 @@
+---
+title: "Optional Stopping"
+author: "Simon Schwab"
+date: "20 Sep 2019"
+output: html_notebook
+---
+
+```{r}
+N_MAX = 30
+N = 15
+N_SIMS =2*10^3
+n_rows = N_SIMS*length(N:N_MAX)
+result = data.frame(n_start = rep(NA,n_rows), n=rep(NA,n_rows),
+                    p=rep(NA,n_rows), issign=rep(NA,n_rows), N_SIM=rep(N_SIMS, n_rows))
+alpha = 0.05
+M = 0
+SD = 1
+i = 1
+for (n in N:N_MAX) { # iterate across optional stopping
+  print(paste(n, "of", N_MAX))
+  n_start = n # below n_start will be kept constant across k simulations
+  for (k in 1:N_SIMS) { # iterate across simulations
+    p = 1
+    n = n_start # reset n for next simulation
+    # optional stopping: increase sample size. When significant stop.
+    a = rnorm(n = n, mean = M, sd = SD)
+    b = rnorm(n = n, mean = M, sd = SD)
+    p = t.test(a, b, var.equal = TRUE, paired = FALSE, alternative = "two.sided")$p.value
+    # p = wilcox.test(a, b)$p.value
+    while (p >= alpha & length(a) < N_MAX) {
+      a = c(a, rnorm(1, mean = M, sd = SD)) # increase group size by one
+      b = c(b, rnorm(1, mean = M, sd = SD)) # increase group size by one
+      p = t.test(a, b, var.equal = TRUE, paired = FALSE, alternative = "two.sided")$p.value
+      # p = wilcox.test(a, b)$p.value
+    }
+    result$n_start[i] = n_start
+    result$n[i] = length(a)
+    result$p[i] = p
+    result$issign[i] = p < alpha
+    i = i + 1
+  }
+}
+result$n_start = as.factor(result$n_start)
+```
+
+```{r fig.height=3, fig.width=8}
+library(ggplot2)
+
+
+propSign = sprintf("%.1f%%", tapply(result$issign, result$n_start, sum)/result$N_SIM[1]*100)
+
+ggplot(result, aes(x=n_start, y=p, group=issign, color=issign)) +
+  geom_point(shape=1, size=1, position = position_jitter(width = 0.3, height = 0), alpha = 0.4) +  # alpha = 0.02
+  scale_y_continuous(name="p-value", limits=c(0, 1.1), breaks=c(0, 0.05, 0.10, 0.5, 1)) + 
+  #scale_color_manual(values=c("#999999", "#E69F00")) +
+  scale_color_brewer(palette="Dark2") +
+  annotate("text", label = propSign, x = 1:nlevels(result$n_start), y = 0.1,
+           color = "black", size=3, hjust = 0, angle = 90) +
+  xlab("n (optional stopping)") + labs(color="p < 0.05")
+
+ggsave(filename = "OptionalStopping.png", bg = "transparent", width = 6, height = 2.5)
+```
+
+
+
+
